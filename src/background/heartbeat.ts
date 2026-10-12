@@ -1,5 +1,5 @@
 import browser from 'webextension-polyfill'
-import { getActiveWindowTab, getTab, getTabs } from './helpers'
+import { getActiveWindowTab, getTab, getTabGroup, getTabs } from './helpers'
 import config from '../config'
 import { AWClient, IEvent } from 'aw-client'
 import { getBucketId, sendHeartbeat } from './client'
@@ -54,7 +54,10 @@ function formatHeartbeatLogData(data: IEvent['data']) {
 type HeartbeatTab = Pick<
   browser.Tabs.Tab,
   'url' | 'title' | 'audible' | 'incognito'
->
+> & {
+  // Chromium tab group id; -1 or undefined when the tab is not in a group.
+  groupId?: number
+}
 
 async function heartbeat(
   client: AWClient,
@@ -94,6 +97,12 @@ async function heartbeat(
   // nothing to event size.
   const profile = await getProfileName()
   if (profile) data.profile = profile
+  // Likewise only set when the tab is in a Chromium tab group.
+  const group = await getTabGroup(tab.groupId)
+  if (group) {
+    data.tab_group = group.title
+    data.tab_group_color = group.color
+  }
   const previousData = await getHeartbeatData()
   if (previousData && !deepEqual(previousData, data)) {
     console.debug(
@@ -129,6 +138,7 @@ function snapshotTab(tab: browser.Tabs.Tab): HeartbeatTab {
     title: tab.title,
     audible: tab.audible,
     incognito: tab.incognito,
+    groupId: (tab as browser.Tabs.Tab & { groupId?: number }).groupId,
   }
 }
 

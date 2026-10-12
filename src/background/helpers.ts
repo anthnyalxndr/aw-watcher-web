@@ -33,6 +33,32 @@ export const getActiveWindowTab = async (): Promise<
   return undefined
 }
 
+// Tab groups are Chromium-only (chrome.tabGroups). webextension-polyfill does
+// not expose the namespace, so reach for it via the global and treat its
+// absence (Firefox, Safari, older Chrome) as "no group".
+export interface TabGroupInfo {
+  title: string
+  color: string
+}
+
+const TAB_GROUP_ID_NONE = -1
+
+export const getTabGroup = async (
+  groupId: number | undefined,
+): Promise<TabGroupInfo | undefined> => {
+  if (groupId === undefined || groupId === TAB_GROUP_ID_NONE) return undefined
+  const tabGroups = (globalThis as any).chrome?.tabGroups
+  if (!tabGroups?.get) return undefined
+  try {
+    const group = await tabGroups.get(groupId)
+    return { title: group.title ?? '', color: group.color }
+  } catch (e) {
+    // The group may have been dissolved between the tab query and this call.
+    console.debug('Could not resolve tab group', groupId, e)
+    return undefined
+  }
+}
+
 export function emitNotification(title: string, message: string) {
   browser.notifications.create({
     type: 'basic',
